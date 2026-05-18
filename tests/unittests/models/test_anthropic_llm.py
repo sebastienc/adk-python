@@ -1369,12 +1369,11 @@ def test_build_thinking_param_none_config():
 
 
 def test_build_thinking_param_zero_budget():
-  """thinking_budget=0 returns NOT_GIVEN."""
-  from anthropic import NOT_GIVEN
+  """thinking_budget=0 explicitly disables thinking."""
   from google.adk.models.anthropic_llm import _build_thinking_param
 
   result = _build_thinking_param(types.ThinkingConfig(thinking_budget=0), 8192)
-  assert result is NOT_GIVEN
+  assert result["type"] == "disabled"
 
 
 def test_build_thinking_param_valid_budget():
@@ -1586,10 +1585,8 @@ async def test_generate_content_async_no_thinking_config_passes_not_given():
 
 
 @pytest.mark.asyncio
-async def test_generate_content_async_thinking_budget_zero_passes_not_given():
-  """thinking_budget=0 results in NOT_GIVEN being passed to messages.create."""
-  from anthropic import NOT_GIVEN
-
+async def test_generate_content_async_thinking_budget_zero_passes_disabled():
+  """thinking_budget=0 results in disabled being passed to messages.create."""
   llm = AnthropicLlm(model="claude-sonnet-4-20250514")
 
   mock_message = anthropic_types.Message(
@@ -1628,7 +1625,7 @@ async def test_generate_content_async_thinking_budget_zero_passes_not_given():
     _ = [r async for r in llm.generate_content_async(llm_req, stream=False)]
 
   _, kwargs = mock_client.messages.create.call_args
-  assert kwargs["thinking"] is NOT_GIVEN
+  assert kwargs["thinking"]["type"] == "disabled"
 
 
 @pytest.mark.asyncio

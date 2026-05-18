@@ -256,6 +256,7 @@ def content_block_to_part(
     # Preserve the encrypted blob so it can round-trip back to Claude in
     # the next turn; required to keep the model's reasoning chain intact.
     return types.Part(
+        text="",
         thought=True,
         thought_signature=content_block.data.encode("utf-8"),
     )
@@ -268,18 +269,6 @@ def content_block_to_part(
     )
     part.function_call.id = content_block.id
     return part
-  if isinstance(content_block, anthropic_types.ThinkingBlock):
-    return types.Part(
-        text=content_block.thinking,
-        thought=True,
-        thought_signature=content_block.signature.encode("utf-8"),
-    )
-  if isinstance(content_block, anthropic_types.RedactedThinkingBlock):
-    return types.Part(
-        text="",
-        thought=True,
-        thought_signature=content_block.data.encode("utf-8"),
-    )
   raise NotImplementedError("Not supported yet.")
 
 
@@ -578,13 +567,9 @@ class AnthropicLlm(BaseLlm):
               _ThinkingAccumulator(thinking="", signature=""),
           )
           thinking_blocks[event.index].thinking += delta.thinking
-          yield LlmResponse(
-              content=types.Content(
-                  role="model",
-                  parts=[types.Part(text=delta.thinking, thought=True)],
-              ),
-              partial=True,
-          )
+        elif isinstance(delta, anthropic_types.SignatureDelta):
+          if event.index in thinking_blocks:
+            thinking_blocks[event.index].signature = delta.signature
         elif isinstance(delta, anthropic_types.TextDelta):
           text_blocks.setdefault(event.index, "")
           text_blocks[event.index] += delta.text
@@ -598,12 +583,6 @@ class AnthropicLlm(BaseLlm):
         elif isinstance(delta, anthropic_types.InputJSONDelta):
           if event.index in tool_use_blocks:
             tool_use_blocks[event.index].args_json += delta.partial_json
-        elif isinstance(delta, anthropic_types.ThinkingDelta):
-          if event.index in thinking_blocks:
-            thinking_blocks[event.index].thinking += delta.thinking
-        elif isinstance(delta, anthropic_types.SignatureDelta):
-          if event.index in thinking_blocks:
-            thinking_blocks[event.index].signature = delta.signature
 
       elif event.type == "message_delta":
         output_tokens = event.usage.output_tokens
@@ -640,7 +619,9 @@ class AnthropicLlm(BaseLlm):
         all_parts.append(types.Part.from_text(text=text_blocks[idx]))
       if idx in tool_use_blocks:
         tool_use_acc = tool_use_blocks[idx]
-        args = json.loads(tool_use_acc.args_json) if tool_use_acc.args_json else {}
+        args = (
+            json.loads(tool_use_acc.args_json) if tool_use_acc.args_json else {}
+        )
         part = types.Part.from_function_call(name=tool_use_acc.name, args=args)
         part.function_call.id = tool_use_acc.id
         all_parts.append(part)
