@@ -46,6 +46,7 @@ from tau_bench.types import RunConfig
 import tau_bench_agent as tau_bench_agent_lib
 import utils
 
+
 def run_tau_bench_rollouts(
     config: RunConfig,
     print_results: bool = False,
